@@ -14,7 +14,7 @@ OPENMETEO_URL = "https://api.open-meteo.com/v1/forecast"
 KEY_HR_TEXT_MAP = {
     "precipitation_probability": "Rain %",
     "temperature_2m": "Temp",
-    "apparent_temperature": "Apparent Temp",
+    "apparent_temperature": "Temp °C",
     "relative_humidity_2m": "Rel. Humidity",
     "uv_index": "UV Index",
 }
@@ -55,15 +55,23 @@ def get_start_and_end_dates_for_forecast(date_format="%Y-%m-%d"):
 
 
 def get_weather_variables():
-    weather_vars = os.getenv("WEATHER_VARS")
-    return list(map(str.strip, weather_vars.split(",")))
+    weather_variables = os.getenv("WEATHER_VARS")
+    return list(map(str.strip, weather_variables.split(",")))
 
 
-def generate_params_for_forecast_api(lat_long, date_range, timezone, weather_vars):
-    return {**lat_long, "hourly": weather_vars, "timezone": timezone, **date_range}
+def generate_params_for_forecast_api(
+    lat_long, date_range, timezone, weather_variables, temp_unit="celsius"
+):
+    return {
+        **lat_long,
+        "hourly": weather_variables,
+        "timezone": timezone,
+        **date_range,
+        "temperature_unit": temp_unit,
+    }
 
 
-def get_hourly_data_df(response):
+def get_hourly_data_df(response, weather_variables):
     hourly = response.Hourly()
     hourly_data = {
         "timestamp": pl.datetime_range(
@@ -73,12 +81,9 @@ def get_hourly_data_df(response):
             closed="left",
             eager=True,
         ),
-        "precipitation_probability": hourly.Variables(0).ValuesAsNumpy(),
-        "temperature_2m": hourly.Variables(3).ValuesAsNumpy(),
-        "apparent_temperature": hourly.Variables(1).ValuesAsNumpy(),
-        "relative_humidity_2m": hourly.Variables(4).ValuesAsNumpy(),
-        "uv_index": hourly.Variables(2).ValuesAsNumpy(),
     }
+    for index, var in enumerate(weather_variables):
+        hourly_data[var] = hourly.Variables(index).ValuesAsNumpy()
     return pl.LazyFrame(hourly_data)
 
 
@@ -93,30 +98,23 @@ def should_include_tag(df):
     )
 
 
-def generate_msg_content(df, current_day, include_tags=None):
+def generate_msg_content(df, current_day, weather_variables, include_tags=None):
     PIPE = " | "
     _df = df.collect()
-    line_list = [[" ", *list(KEY_HR_TEXT_MAP.values())]]
+    line_list = [["Time", *[KEY_HR_TEXT_MAP[var] for var in weather_variables]]]
     max_lens = list(map(len, line_list[0]))
-    for ts, rain_pct, temp, apparent_temp, rel_humidity, uv_index in _df.iter_rows():
-        hour = ts.strftime("%-H:%M")
-        _rain_pct = f"{int(rain_pct)}"
-        _temp = int(temp)
-        _apparent_temp = int(apparent_temp)
-        _humidity = int(rel_humidity)
-        _uv_index = int(uv_index)
-        line = [
-            hour,
-            _rain_pct,
-            _temp,
-            _apparent_temp,
-            _humidity,
-            _uv_index,
-        ]
+    for row in _df.iter_rows():
+        line = [row[0].strftime("%-H:%M")]
+        for index, var in enumerate(weather_variables, 1):
+            cell_value = int(row[index])
+            if "probability" in var:
+                cell_value = f"{cell_value}%"
+            line.append(cell_value)
         line_list.append(list(map(str, line)))
-        for i, val in enumerate(line):
+        for index, val in enumerate(line):
             val_str_len = len(str(val))
-            max_lens[i] = val_str_len if val_str_len > max_lens[i] else max_lens[i]
+            if val_str_len > max_lens[index]:
+                max_lens[index] = val_str_len
     lines = [f"*Weather forecast for {current_day.strftime('%B %d, %Y')}*\n"]
     for i, ll in enumerate(line_list):
         _temp = []
@@ -161,11 +159,12 @@ def run_notifier():
         return
     openmeteo = get_weather_api_client()
     forecast_range = get_start_and_end_dates_for_forecast()
+    weather_variables = get_weather_variables()
     params = generate_params_for_forecast_api(
         lat_long,
         forecast_range,
         os.getenv("TIMEZONE") or "UTC",
-        get_weather_variables(),
+        weather_variables,
     )
     logger.info(f"Params for forecast api: {params}.")
     responses = openmeteo.weather_api(OPENMETEO_URL, params=params)
@@ -174,7 +173,7 @@ def run_notifier():
         return
     logger.info("Weather forecast api data pulled.")
     current_day = datetime.strptime(forecast_range["start_date"], "%Y-%m-%d")
-    hourly_data_lf = get_hourly_data_df(responses[0])
+    hourly_data_lf = get_hourly_data_df(responses[0], weather_variables)
     hourly_data_lf = hourly_data_lf.filter(
         (pl.col("timestamp") >= current_day.replace(hour=8))
         & (pl.col("timestamp") <= current_day.replace(hour=21))
@@ -189,7 +188,9 @@ def run_notifier():
         logger.info("Including tags in slack message.")
         slack_mentions_str = os.getenv("SLACK_IDS")
         tags = generate_mentions(list(map(str.strip, slack_mentions_str.split(","))))
-    slack_message = generate_msg_content(hourly_data_lf, current_day, include_tags=tags)
+    slack_message = generate_msg_content(
+        hourly_data_lf, current_day, weather_variables, include_tags=tags
+    )
     response = send_slack_message(slack_client, slack_channel, slack_message)
     if type(response) is dict and not response["ok"]:
         logger.info(
