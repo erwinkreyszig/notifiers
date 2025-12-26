@@ -1,0 +1,8 @@
+geopy==2.4.1
+python-dotenv==1.2.1
+openmeteo_requests==1.7.4
+requests-cache==1.2.1
+retry-requests==2.0.0
+numpy==2.2.6
+polars==1.36.1
+slack_sdk==3.39.0
