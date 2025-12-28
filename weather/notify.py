@@ -1,6 +1,7 @@
 import logging
 import os
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import openmeteo_requests
 import polars as pl
@@ -46,12 +47,9 @@ def get_weather_api_client():
     return openmeteo_requests.Client(session=retry_session)
 
 
-def get_start_and_end_dates_for_forecast(date_format="%Y-%m-%d"):
-    today = datetime.today()
-    return {
-        "start_date": today.strftime(date_format),
-        "end_date": (today + timedelta(days=1)).strftime(date_format),
-    }
+def get_start_and_end_dates_for_forecast(tz):
+    today = datetime.now(tz)
+    return {"start_date": today, "end_date": today + timedelta(days=1)}
 
 
 def get_weather_variables():
@@ -60,13 +58,21 @@ def get_weather_variables():
 
 
 def generate_params_for_forecast_api(
-    lat_long, date_range, timezone, weather_variables, temp_unit="celsius"
+    lat_long,
+    date_range,
+    timezone,
+    weather_variables,
+    temp_unit="celsius",
+    date_format="%Y-%m-%d",
 ):
+    date_range_strs = {
+        key: value.strftime(date_format) for key, value in date_range.items()
+    }
     return {
         **lat_long,
         "hourly": weather_variables,
         "timezone": timezone,
-        **date_range,
+        **date_range_strs,
         "temperature_unit": temp_unit,
     }
 
@@ -158,12 +164,14 @@ def run_notifier():
         logger.info(f"Encountered an error: `{error}`")
         return
     openmeteo = get_weather_api_client()
-    forecast_range = get_start_and_end_dates_for_forecast()
+    tz_str = os.getenv("TIMEZONE") or "UTC"
+    tz = ZoneInfo(tz_str)
+    forecast_range = get_start_and_end_dates_for_forecast(tz)
     weather_variables = get_weather_variables()
     params = generate_params_for_forecast_api(
         lat_long,
         forecast_range,
-        os.getenv("TIMEZONE") or "UTC",
+        tz_str,
         weather_variables,
     )
     logger.info(f"Params for forecast api: {params}.")
@@ -172,11 +180,13 @@ def run_notifier():
         logger.info("No response from weather api.")
         return
     logger.info("Weather forecast api data pulled.")
-    current_day = datetime.strptime(forecast_range["start_date"], "%Y-%m-%d")
+    current_day = forecast_range["start_date"]
     hourly_data_lf = get_hourly_data_df(responses[0], weather_variables)
+    common_time_vars = {"minute": 0, "second": 0, "microsecond": 0, "tzinfo": None}
+    naive_min_ts = current_day.replace(**{"hour": 8, **common_time_vars})
+    naive_max_ts = current_day.replace(**{"hour": 21, **common_time_vars})
     hourly_data_lf = hourly_data_lf.filter(
-        (pl.col("timestamp") >= current_day.replace(hour=8))
-        & (pl.col("timestamp") <= current_day.replace(hour=21))
+        (pl.col("timestamp") >= naive_min_ts) & (pl.col("timestamp") <= naive_max_ts)
     )
     logger.info("Preparing slack notification.")
     slack_token = os.getenv("SLACK_BOT_TOKEN")
