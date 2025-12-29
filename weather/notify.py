@@ -1,3 +1,5 @@
+#!/usr/bin/python -u
+
 import logging
 import os
 from datetime import datetime, timedelta
@@ -9,7 +11,8 @@ import requests_cache
 from dotenv import load_dotenv
 from geopy.geocoders import Nominatim
 from retry_requests import retry
-from slack_sdk import WebClient
+
+from common.slack import generate_mentions, get_slack_client, send_slack_message
 
 OPENMETEO_URL = "https://api.open-meteo.com/v1/forecast"
 KEY_HR_TEXT_MAP = {
@@ -93,8 +96,7 @@ def get_hourly_data_df(response, weather_variables):
     return pl.LazyFrame(hourly_data)
 
 
-def should_include_tag(df):
-    threshold = os.getenv("THRESHOLD_FOR_RAIN_TAG")
+def should_include_tag(df, threshold=None):
     if not threshold:
         return False
     return (
@@ -121,7 +123,11 @@ def generate_msg_content(df, current_day, weather_variables, include_tags=None):
             val_str_len = len(str(val))
             if val_str_len > max_lens[index]:
                 max_lens[index] = val_str_len
-    lines = [f"*Weather forecast for {current_day.strftime('%B %d, %Y')}*\n"]
+    line = f"*Weather forecast for {current_day.strftime('%B %d, %Y')}*"
+    if include_tags:
+        line = f"{line} {include_tags}"
+    line = f"{line}\n"
+    lines = [line]
     for i, ll in enumerate(line_list):
         _temp = []
         for cell_content, fill_length in zip(ll, max_lens):
@@ -135,18 +141,6 @@ def generate_msg_content(df, current_day, weather_variables, include_tags=None):
     if include_tags:
         lines.append(f"\n{include_tags}")
     return "".join(lines)
-
-
-def get_slack_client(token):
-    return WebClient(token=token)
-
-
-def generate_mentions(user_id_list: list) -> str:
-    return " ".join(f"<@{user_id}>" for user_id in user_id_list)
-
-
-def send_slack_message(client, channel_id: str, message: str) -> None:
-    return client.chat_postMessage(channel=channel_id, text=message)
 
 
 def run_notifier():
@@ -194,7 +188,8 @@ def run_notifier():
     slack_client = get_slack_client(slack_token)
     logger.info("Slack bot ready.")
     tags = None
-    if should_include_tag(hourly_data_lf):
+    threshold = os.getenv("THRESHOLD_FOR_RAIN_TAG")
+    if should_include_tag(hourly_data_lf, threshold):
         logger.info("Including tags in slack message.")
         slack_mentions_str = os.getenv("SLACK_IDS")
         tags = generate_mentions(list(map(str.strip, slack_mentions_str.split(","))))
@@ -212,5 +207,5 @@ def run_notifier():
 
 if __name__ == "__main__":
     logger = logging.getLogger()
-    load_dotenv()
+    load_dotenv("weather/.env")
     run_notifier()
