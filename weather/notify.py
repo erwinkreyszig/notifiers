@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo
 import openmeteo_requests
 import polars as pl
 import requests_cache
-from dotenv import load_dotenv
 from geopy.geocoders import Nominatim
 from retry_requests import retry
 
@@ -22,6 +21,7 @@ KEY_HR_TEXT_MAP = {
     "relative_humidity_2m": "Rel. Humidity",
     "uv_index": "UV Index",
 }
+logger = logging.getLogger()
 
 
 def get_geolocator(app_name):
@@ -206,6 +206,4 @@ def run_notifier():
 
 
 if __name__ == "__main__":
-    logger = logging.getLogger()
-    load_dotenv("weather/.env")
-    run_notifier()
+    pass
