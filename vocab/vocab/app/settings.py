@@ -138,3 +138,7 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
+
+# Slack
+SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
+SLACK_CHANNEL = os.getenv("SLACK_CHANNEL")

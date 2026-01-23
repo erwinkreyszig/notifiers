@@ -1,3 +1,4 @@
+from enum import Enum
 from random import randint
 
 import polars as pl
@@ -14,6 +15,17 @@ from wordlist.models import (
 )
 
 COL = pl.col
+
+
+class Responses(Enum):
+    INCOMPLETE = "request is missing required one or more keys: email, language_code_from, language_code_to, word_group_code"
+    EMAIL_DOES_NOT_EXIST = "email is not in the system"
+    NO_LANGUAGE_PAIR = "language pair for email is not in the system"
+    NO_WORD_GROUP = (
+        "word_group_code for email and language_code_to is not in the system"
+    )
+    USER_HAS_NO_LANGUAGE = "language is not registered to email"
+    USER_HAS_NO_WORD_GROUP = "word group is not registered to email"
 
 
 def user_exists(email: str) -> bool:
@@ -115,3 +127,46 @@ def log_word_usage(word_id: int, email: str) -> None:
         user_word.seen_count += 1
         user_word.last_seen = now
         user_word.save()
+
+
+def get_new_word(email: str, language_code: str, word_group_code: str) -> dict:
+    words = get_words_in_language(language_code, word_group_code)
+    words = attach_seen_counts(words, email)
+    seen_counts_info = get_seen_counts_info(words)
+    words = get_words_with_seen_count(words, seen_counts_info["min"])
+    return get_random_word(words)
+
+
+def get_user_info(email: str) -> dict:
+    account = Account.objects.values_list("email", "slack_id").filter(email=email)
+    return dict(account)
+
+
+def generate_slack_message(word: dict, usages: pl.LazyFrame, tags: str = None) -> str:
+    header_content = word["word"]
+    if word["word"] != word["word_full"]:
+        header_content = f"{header_content}, ({word['word_full']})"
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": header_content},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"- _{word['meaning']}_"},
+        },
+    ]
+    for sentence, translation in usages.collect().iter_rows():
+        block = {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*{sentence}*\n> _{translation}_"},
+        }
+        blocks.append(block)
+    if tags:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": tags},
+            }
+        )
+    return blocks
