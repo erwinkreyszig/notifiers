@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from random import randint
@@ -21,6 +22,7 @@ from wordlist.models import (
 )
 
 COL = pl.col
+logger = logging.getLogger(__name__)
 
 
 class Responses(Enum):
@@ -51,6 +53,10 @@ class WordGenerator:
         if self.word_group_code and not self.__user_has_word_group_for_language():
             raise UserDoesNotHaveWordGroup()
         self.get_user_info()
+        logging.debug(
+            f"WordGenerator init successful | {self.email=}, "
+            f"{self.language_code_from=}, {self.language_code_to=}, {self.word_group_code=}."
+        )
 
     def __user_exists(self):
         return Account.objects.filter(email=self.email)
@@ -85,9 +91,17 @@ class WordGenerator:
             words = words.join(word_groups, left_on="id", right_on="word_id")
             cols.append(COL("group_id"))
         self.words = words.select(*cols)
+        logger.debug(
+            f"{self.get_words_in_language.__name__} | "
+            f"Words in language ({self.language_code_to}) pulled."
+        )
 
     def get_seen_counts(self) -> pl.LazyFrame:
+        this_method_name = self.get_seen_counts.__name__
         if self.words is None:
+            logger.debug(
+                f"{this_method_name} | Words not yet pulled. Trying to get them..."
+            )
             self.get_words_in_language()
         user_words = UserWord.lazy_objects.filter(user__email=self.email).lazy
         words_with_seen_counts = self.words.join(
@@ -104,34 +118,55 @@ class WordGenerator:
             COL("seen_count").fill_null(0),
             COL("last_seen"),
         )
+        logger.debug(f"{this_method_name} | Words data annotated with seen counts")
 
     def get_seen_counts_info(self) -> dict[str, int]:
+        this_method_name = self.get_seen_counts_info.__name__
         if self.words is None:
+            logger.debug(
+                f"{this_method_name} | Words not pulled yet. Trying to get them..."
+            )
             self.get_seen_counts()
         col_name = "seen_count"
         alias = "unique_seen_counts"
-        return {
+        seen_counts_info = {
             "min": self.words.select(COL(col_name).min()).collect().item(),
             "values": self.words.select(COL(col_name).unique().alias(alias))
             .collect()[alias]
             .to_list(),
         }
+        logger.debug(f"{this_method_name} | Seen count data pulled: {seen_counts_info}")
+        return seen_counts_info
 
     def get_words_with_seen_count(self):
+        this_method_name = self.get_words_with_seen_count.__name__
         if self.words is None:
+            logger.debug(
+                f"{this_method_name} | Words not pulled yet. Trying to get them..."
+            )
             self.get_seen_counts()
         seen_counts_info = self.get_seen_counts_info()
         self.words = self.words.filter(COL("seen_count") == seen_counts_info["min"])
+        logger.debug(f"{this_method_name} | Words with min seen_count pulled.")
 
     def get_word_usages(self):
+        this_method_name = self.get_word_usages.__name__
         if not self.word:
+            logger.debug(
+                f"{this_method_name} | Word not determined yet. Trying to get one..."
+            )
             self.get_word()
+        logger.debug(f"Usages for word `{self.word['word']}` pulled.")
         return Usage.lazy_objects.filter(word__pk=self.word["word_id"]).lazy.select(
             COL("sentence"), COL("translation")
         )
 
     def get_word(self, random: bool = True):
+        this_method_name = self.get_word.__name__
         if self.words is None:
+            logger.debug(
+                f"{this_method_name} | Words not pulled yet. Trying to get them..."
+            )
             self.get_words_with_seen_count()
         if not random:
             _words = self.words.sort(["word", "word_id"]).collect()
@@ -140,13 +175,21 @@ class WordGenerator:
                 n=1, shuffle=True, seed=randint(0, 10000)
             )
         self.word = _words.row(0, named=True)
+        logger.debug(
+            f"{this_method_name} | Got a word{', randomly' if random else ''}."
+        )
 
     def generate_word(self):
+        logger.debug(f"{self.generate_word.__name__} | Generating word...")
         self.get_word()
         return (self.word, self.get_word_usages())
 
     def log_word_usage(self):
+        this_method_name = self.log_word_usage.__name__
         if not self.word:
+            logger.debug(
+                f"{this_method_name} | Word not determined yet. Nothing to log."
+            )
             return False
         word = Word.objects.get(pk=self.word["word_id"])
         user = Account.objects.get(email=self.email)
@@ -158,6 +201,10 @@ class WordGenerator:
             user_word.seen_count += 1
             user_word.last_seen = now
             user_word.save()
+        logger.debug(
+            f"{this_method_name} | Seen count for word "
+            f"{self.word['word']} {'created' if created else 'updated'}."
+        )
         return True
 
     def get_user_info(self):
