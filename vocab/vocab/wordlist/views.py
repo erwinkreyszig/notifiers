@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from rest_framework import status
 from rest_framework.response import Response
@@ -11,9 +13,12 @@ from wordlist.exceptions import (
 from wordlist.slack import VocabSlackBot
 from wordlist.utils import Responses, WordGenerator
 
+logger = logging.getLogger(__name__)
+
 
 class VocabRunner(APIView):
     def post(self, request, format=None):
+        this_method_name = self.post.__name__
         email = request.data.get("email", None)
         language_code_from = request.data.get("language_code_from", None)
         language_code_to = request.data.get("language_code_to", None)
@@ -38,7 +43,11 @@ class VocabRunner(APIView):
             return Response(
                 {"reason": Responses.NO_WORD_GROUP.value}, status=status_400
             )
-        except Exception:
+        except Exception as e:
+            logger.debug(
+                f"{this_method_name} | exception occurred "
+                f"in initializing WordGenerator class: {e}"
+            )
             return Response(
                 {"reason": Responses.SERVER_ISSUE.value},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -47,6 +56,9 @@ class VocabRunner(APIView):
         try:
             word, usages = wg.generate_word()
         except Exception:
+            logger.debug(
+                f"{this_method_name} | exception occurred in generating word: {e}"
+            )
             return Response(
                 {"reason": Responses.SERVER_ISSUE.value},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -61,12 +73,19 @@ class VocabRunner(APIView):
                 settings.SLACK_CHANNEL, message="", blocks=blocks
             )
         except Exception:
+            logger.debug(
+                f"{this_method_name} | exception occurred "
+                f"in preparing slack message: {e}"
+            )
             return Response(
                 {"reason": Responses.SERVER_ISSUE.value},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
         if getattr(result, "status_code", None) != 200:
+            logger.debug(
+                f"{this_method_name} | exception occurred in sending slack message"
+            )
             return Response(
                 {"reason": "error in sending slack message"}, status=status_400
             )
