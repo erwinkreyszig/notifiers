@@ -55,7 +55,7 @@ class VocabRunner(APIView):
 
         try:
             word, usages = wg.generate_word()
-        except Exception:
+        except Exception as e:
             logger.debug(
                 f"{this_method_name} | exception occurred in generating word: {e}"
             )
@@ -72,7 +72,7 @@ class VocabRunner(APIView):
             result = slack_bot.send_message(
                 settings.SLACK_CHANNEL, message="", blocks=blocks
             )
-        except Exception:
+        except Exception as e:
             logger.debug(
                 f"{this_method_name} | exception occurred "
                 f"in preparing slack message: {e}"
