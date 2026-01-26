@@ -104,21 +104,34 @@ class WordGenerator:
             )
             self.get_words_in_language()
         user_words = UserWord.lazy_objects.filter(user__email=self.email).lazy
-        words_with_seen_counts = self.words.join(
-            user_words,
-            how="left",
-            on="word_id",
-            join_nulls=True,
-        )
-        self.words = words_with_seen_counts.select(
-            COL("word_id"),
-            COL("word"),
-            COL("meaning"),
-            COL("word_full"),
-            COL("seen_count").fill_null(0),
-            COL("last_seen"),
-        )
-        logger.debug(f"{this_method_name} | Words data annotated with seen counts")
+        if UserWord.objects.filter(user__email=self.email).exists():
+            words_with_seen_counts = self.words.join(
+                user_words,
+                how="left",
+                on="word_id",
+                join_nulls=True,
+            )
+            self.words = words_with_seen_counts.select(
+                COL("word_id"),
+                COL("word"),
+                COL("meaning"),
+                COL("word_full"),
+                COL("seen_count").fill_null(0),
+                COL("last_seen"),
+            )
+            logger.debug(f"{this_method_name} | Words data annotated with seen counts")
+        else:
+            self.words = self.words.select(
+                COL("word_id"),
+                COL("word"),
+                COL("meaning"),
+                COL("word_full"),
+                pl.lit(0).alias("seen_count"),
+                pl.lit(None).alias("last_seen"),
+            )
+            logger.debug(
+                f"{this_method_name} | Words data populated with 0 seen counts"
+            )
 
     def get_seen_counts_info(self) -> dict[str, int]:
         this_method_name = self.get_seen_counts_info.__name__
