@@ -1,3 +1,4 @@
+import asyncio  # noqa
 import logging
 import os
 
@@ -13,9 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 @bus_app.get("/where/{route_number}")
-def get_bus_locations(route_number: int):
+async def get_bus_locations(route_number: int):
     locator = BusLocator(BUS_NUMBER_URL_MAP[route_number], logger)
-    locator.run_playwright_context()
+    await locator.run_playwright_context()
     current_locations = locator.get_current_bus_locations()
 
     slack_bot = BusConciergeSlackBot(os.getenv("SLACK_BOT_TOKEN"))
