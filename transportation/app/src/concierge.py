@@ -36,6 +36,8 @@ class BusLocator:
         if current_stop_locator_count < 1:
             self.logger.info("Bus location indicator could not be found.")
             self._locations[route_key] = ["Not available."]
+            duration = time.perf_counter() - start
+            self.logger.info(f"Operation took {duration:.2f} seconds.")
             return
         bus_area_divs = page.locator("div.busArea").filter(has=current_stop_locator)
         self.logger.info("Bus location indicator found. Looking up stop name(s).")
