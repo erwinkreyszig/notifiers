@@ -1,0 +1,12 @@
+services:
+  bus_concierge:
+    build: ./app
+    container_name: bus_concierge
+    ports:
+      - "8200:8200"
+    volumes:
+      - ./app:/app
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL}
+    env_file:
+      - .env
