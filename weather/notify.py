@@ -138,8 +138,6 @@ def generate_msg_content(df, current_day, weather_variables, include_tags=None):
             lines.append(f"{PIPE.join(_temp)}```")
         else:
             lines.append(f"{PIPE.join(_temp)}\n")
-    if include_tags:
-        lines.append(f"\n{include_tags}")
     return "".join(lines)
 
 
