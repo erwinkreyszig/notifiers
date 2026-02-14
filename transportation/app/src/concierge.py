@@ -11,22 +11,20 @@ class BusLocator:
     route_urls: tuple[str]
     logger: logging.Logger
     _locations: dict = field(default_factory=dict)
+    _browser: any = None
 
     async def run_playwright_context(self, headless: bool = True) -> None:
-        for route_url in self.route_urls:
-            async with async_playwright() as playwright:
+        async with async_playwright() as playwright:
+            for route_url in self.route_urls:
                 await self.get_current_location(playwright, route_url, headless)
+        await self._browser.close()
 
     async def get_current_location(
         self, playwright: Playwright, route_url: str, headless: bool
     ) -> None:
         start = time.perf_counter()
         self.logger.info(f"Getting bus location from `{route_url}`.")
-        browser = await playwright.chromium.launch(headless=headless)
-        page = await browser.new_page()
-        self.logger.info(f"Page opened{'(headless)' if headless else ''}.")
-        if not headless:
-            page.set_viewport_size({"width": 1600, "height": 900})
+        page = await self.__get_browser_page(playwright, headless)
         await page.goto(route_url)
         self.logger.info("Navigated to url.")
         current_stop_locator = page.locator("div.congestion")
@@ -50,12 +48,23 @@ class BusLocator:
             ).inner_text()
             self.logger.info(f"Stop name found: {bus_stop_name}")
             self._locations.setdefault(destination, []).append(bus_stop_name)
-        await browser.close()
         duration = time.perf_counter() - start
         self.logger.info(f"Operation took {duration:.2f} seconds.")
 
     def get_current_bus_locations(self) -> dict:
         return self._locations
+
+    async def __get_browser_page(self, playwright: Playwright, headless: bool):
+        headless_substr = " (headless) " if headless else " "
+        if not self._browser:
+            self._browser = await playwright.chromium.launch(headless=headless)
+            self.logger.info(f"Browser{headless_substr}opened.")
+        else:
+            self.logger.info(f"Browser{headless_substr}already open.")
+        page = await self._browser.new_page()
+        if not headless:
+            page.set_viewport_size({"width": 1600, "height": 900})
+        return page
 
     def __get_destination_from_page_title(self, page_title: str) -> str:
         self.logger.info("Getting destination.")
