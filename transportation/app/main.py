@@ -3,9 +3,9 @@ import logging
 import os
 
 from fastapi import FastAPI
-from src.concierge import BusLocator
-from src.route_maps import BUS_NUMBER_URL_MAP
 from src.slack import BusConciergeSlackBot
+from src.concierge import BusLocator
+from src.route_maps import get_route_urls
 
 bus_app = FastAPI()
 
@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 @bus_app.get("/where/{route_number}")
-async def get_bus_locations(route_number: int):
-    locator = BusLocator(BUS_NUMBER_URL_MAP[route_number], logger)
+async def get_bus_locations(route_number: int, direction: str | None = None):
+    route_urls = get_route_urls(route_number, direction=direction)
+    locator = BusLocator(route_urls, logger)
     await locator.run_playwright_context()
     current_locations = locator.get_current_bus_locations()
 

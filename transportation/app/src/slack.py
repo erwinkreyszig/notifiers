@@ -33,23 +33,21 @@ class BusConciergeSlackBot(SlackBot):
         date_format = "%d-%b-%Y %I:%M %p"
         blocks = [
             {
-                "type": "header",
-                "text": {
-                    "type": "plain_text",
-                    "text": f"Route #{route_number} as of {now_jp_tz.strftime(date_format)}",
-                },
-            }
-        ]
-        for route_name, bus_stops in locations.items():
-            if len(bus_stops) == 1 and bus_stops[0] == "Not available.":
-                stops_formatted = bus_stops[0]
-            else:
-                stops_formatted = "\n".join([f"- {stop}" for stop in bus_stops])
-            route_block = {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"> *{route_name}*",
+                    "text": f":oncoming_bus: Route *{route_number}* as of *{now_jp_tz.strftime(date_format)}*",
+                },
+            }
+        ]
+        for destination, bus_stops in locations.items():
+            stops_formatted = "\n".join([f"- {stop}" for stop in bus_stops])
+            destination_block = {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f":triangular_flag_on_post: {destination}",
+                    "emoji": True,
                 },
             }
             stops_block = {
@@ -59,5 +57,5 @@ class BusConciergeSlackBot(SlackBot):
                     "text": stops_formatted,
                 },
             }
-            blocks.extend([route_block, stops_block])
+            blocks.extend([destination_block, stops_block])
         return blocks

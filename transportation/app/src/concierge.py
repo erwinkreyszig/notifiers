@@ -29,19 +29,17 @@ class BusLocator:
             page.set_viewport_size({"width": 1600, "height": 900})
         await page.goto(route_url)
         self.logger.info("Navigated to url.")
-        title = await page.title()
-        route_key = self.__get_route_from_page_title(title)
         current_stop_locator = page.locator("div.congestion")
         current_stop_locator_count = await current_stop_locator.count()
         if current_stop_locator_count < 1:
-            self.logger.info("Bus location indicator could not be found.")
-            self._locations[route_key] = ["Not available."]
+            self.logger.info("Bus location indication could not be found.")
             duration = time.perf_counter() - start
             self.logger.info(f"Operation took {duration:.2f} seconds.")
             return
+        title = await page.title()
+        destination = self.__get_destination_from_page_title(title)
         bus_area_divs = page.locator("div.busArea").filter(has=current_stop_locator)
         self.logger.info("Bus location indicator found. Looking up stop name(s).")
-        bus_stop_names = []
         all_bus_area_divs = await bus_area_divs.all()
         for bus_area_div in all_bus_area_divs:
             closest_point_area_div = bus_area_div.locator(
@@ -51,29 +49,35 @@ class BusLocator:
                 "a.busstopName"
             ).inner_text()
             self.logger.info(f"Stop name found: {bus_stop_name}")
-            bus_stop_names.append(bus_stop_name)
-        self._locations[route_key] = bus_stop_names
+            self._locations.setdefault(destination, []).append(bus_stop_name)
         await browser.close()
         duration = time.perf_counter() - start
         self.logger.info(f"Operation took {duration:.2f} seconds.")
 
-    def get_current_bus_locations(self):
+    def get_current_bus_locations(self) -> dict:
         return self._locations
 
-    def __get_route_from_page_title(self, page_title):
-        self.logger.info("Getting page title.")
-        to_remove = ("運行情報", "\xa0", " ", "|")
+    def __get_destination_from_page_title(self, page_title: str) -> str:
+        self.logger.info("Getting destination.")
+        try:
+            index_of_hatsu = page_title.index("発") + 1
+        except (ValueError, TypeError):
+            index_of_hatsu = 0
+        cleaned_destination = page_title[index_of_hatsu:]
         empty_str = ""
-        page_title_copy = page_title[:]
-        for substr in to_remove:
-            page_title_copy = page_title_copy.replace(substr, empty_str)
-        self.logger.info(f"Cleaned page title: `{page_title_copy}`.")
-        return page_title_copy
+        replace_items = {
+            "\xa0": empty_str,
+            " ": empty_str,
+            "|": empty_str,
+            ")": empty_str,
+            "(": empty_str,
+            "ゆき": empty_str,
+        }
+        for substr, replacement in replace_items.items():
+            cleaned_destination = cleaned_destination.replace(substr, replacement)
+        self.logger.info(f"Got destination: `{cleaned_destination}`")
+        return cleaned_destination
 
 
 if __name__ == "__main__":
     pass
-    # logging.basicConfig(level=getattr(logging, os.getenv("LOG_LEVEL") or logging.INFO))
-    # route_number = "26"
-    # locator = BusLocator(BUS_NUMBER_URL_MAP[route_number], logging.getLogger(__name__))
-    # locator.run_playwright_context()
