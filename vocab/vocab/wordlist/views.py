@@ -78,7 +78,10 @@ class VocabRunner(APIView):
                 )
                 continue
             audio_files.append(
-                {"file": f"./{filename}", "title": filename.replace(".mp3", "...")}
+                {
+                    "file": f"./vocab/{filename}",
+                    "title": filename.replace(".mp3", "..."),
+                }
             )
 
         # TODO: join this to the try-except above, use specific exceptions to catch
