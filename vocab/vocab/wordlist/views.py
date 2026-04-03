@@ -89,6 +89,11 @@ class VocabRunner(APIView):
             result = slack_bot.send_message(
                 settings.SLACK_CHANNEL, message="", blocks=blocks
             )
+            result = slack_bot.send_message_with_files(
+                settings.SLACK_CHANNEL,
+                initial_comment=f"Audio files for word: {word['word']}",
+                files=audio_files,
+            )
         except Exception as e:
             logger.debug(
                 f"{this_method_name} | exception occurred "
