@@ -80,6 +80,7 @@ class VocabRunner(APIView):
             audio_files.append(
                 {
                     "file": f"./vocab/{filename}",
+                    "filename": filename,
                     "title": filename.replace(".mp3", "..."),
                 }
             )
