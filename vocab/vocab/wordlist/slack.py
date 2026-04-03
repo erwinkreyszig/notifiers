@@ -21,13 +21,11 @@ class SlackBot:
             args["blocks"] = blocks
         return self.client.chat_postMessage(**args)
 
-    def send_message_with_files(
-        self, channel_id: str, initial_comment: str, files: list[dict]
-    ):
+    def send_message_with_files(self, channel_id: str, file: dict):
         return self.client.files_upload_v2(
             channel=channel_id,
-            initial_comment=initial_comment,
-            files=files,
+            file=file["file_bytes"],
+            filename=file["filename"],
         )
 
     def generate_mentions(self, user_id_list: list[str]) -> str:

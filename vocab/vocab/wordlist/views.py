@@ -79,7 +79,7 @@ class VocabRunner(APIView):
                 continue
             audio_files.append(
                 {
-                    "file": f"./vocab/{filename}",
+                    "file_bytes": b"".join(audio),
                     "filename": filename,
                     "title": filename.replace(".mp3", "..."),
                 }
@@ -92,11 +92,6 @@ class VocabRunner(APIView):
             blocks = slack_bot.generate_block_message(word, usages, tags)
             result = slack_bot.send_message(
                 settings.SLACK_CHANNEL, message="", blocks=blocks
-            )
-            result = slack_bot.send_message_with_files(
-                settings.SLACK_CHANNEL,
-                initial_comment=f"Audio files for word: {word['word']}",
-                files=audio_files,
             )
         except Exception as e:
             logger.debug(
@@ -121,5 +116,16 @@ class VocabRunner(APIView):
                 {"reason": Responses.SERVER_ISSUE.value},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+        for audio_file in audio_files:
+            try:
+                slack_bot.send_message_with_files(
+                    channel_id=settings.SLACK_CHANNEL, file=audio_file
+                )
+            except Exception as e:
+                logger.info(
+                    f"Failed to send audio file: {audio_file['filename']} to Slack, error: {e}"
+                )
+                continue
 
         return Response({"message": "new word sent"}, status=status.HTTP_200_OK)
