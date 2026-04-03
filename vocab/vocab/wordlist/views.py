@@ -11,6 +11,7 @@ from wordlist.exceptions import (
     UserDoesNotHaveWordGroup,
 )
 from wordlist.slack import VocabSlackBot
+from wordlist.tts import TTSApi
 from wordlist.utils import Responses, WordGenerator
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,22 @@ class VocabRunner(APIView):
             return Response(
                 {"reason": Responses.SERVER_ISSUE.value},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        tts = TTSApi(api_key=settings.ELEVENLABS_API_KEY)
+        audio_files = []
+        for sentence, _ in usages.collect().iter_rows():
+            filename = f"{sentence[:14].replace(' ', '_')}.mp3"
+            try:
+                audio = tts.generate_audio(text=sentence)
+                tts.generate_file(audio, filename)
+            except Exception as e:
+                logger.info(
+                    f"Failed to generate audio for sentence: {sentence}, error: {e}"
+                )
+                continue
+            audio_files.append(
+                {"file": f"./{filename}", "title": filename.replace(".mp3", "...")}
             )
 
         # TODO: join this to the try-except above, use specific exceptions to catch
