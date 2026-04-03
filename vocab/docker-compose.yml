@@ -11,6 +11,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     env_file:
       - .env
+    restart: unless-stopped
     
   vocab_api:
     build: ./vocab
@@ -34,5 +35,7 @@ services:
       DATABASE_PORT: ${DATABASE_PORT}
     env_file:
       - .env
+    restart: unless-stopped
+
 volumes:
   postgres_data:
