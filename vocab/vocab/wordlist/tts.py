@@ -7,6 +7,7 @@ VOICES = {
     "leonie": "uvysWDLbKpA4XvpD3GI6",
     "otto": "FTNCalFNG5bRnkkaP5Ug",
     "helmut": "dFA3XRddYScy6ylAYTIO",
+    "lea": "7eVMgwCnXydb3CikjV7a",
 }
 MODELS = {
     "high_quality": "eleven_multilingual_v2",
@@ -31,7 +32,7 @@ class TTSApi:
         self,
         text: str,
         model: str = "high_quality",
-        voice: str = "helmut",
+        voice: str = "lea",
         output_format: str = "mp3_48k",
     ) -> bytes:
         voice_id = VOICES.get(voice)
