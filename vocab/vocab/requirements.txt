@@ -1,6 +1,7 @@
 Django==5.2.9
 django-simple-history==3.11.0
 djangorestframework==3.16.1
+elevenlabs==2.41.0
 gunicorn==23.0.0
 polars==1.36.1
 psycopg2-binary==2.9.11
