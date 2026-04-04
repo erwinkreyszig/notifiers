@@ -146,6 +146,12 @@ STORAGES = {
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_CHANNEL = os.getenv("SLACK_CHANNEL")
 
+# ElevenLabs TTS API
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+
+# NeuTTS server url
+NEUTTS_SERVER_URL = os.getenv("NEUTTS_SERVER_URL", None)
+
 # Logging
 LOGGING = {
     "version": 1,

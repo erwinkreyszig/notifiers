@@ -53,4 +53,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8100
 
 # start application using gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8100", "--workers", "1", "app.wsgi:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8100", "--workers", "1", "--timeout", "120", "app.wsgi:application"]

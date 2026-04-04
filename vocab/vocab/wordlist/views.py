@@ -1,5 +1,6 @@
 import logging
 
+import requests
 from django.conf import settings
 from rest_framework import status
 from rest_framework.response import Response
@@ -64,6 +65,31 @@ class VocabRunner(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+        audio_files = []
+        if settings.NEUTTS_SERVER_URL:
+            for sentence, _ in usages.collect().iter_rows():
+                filename = f"{sentence[:16].replace(' ', '_')}.wav"
+                try:
+                    response = requests.post(
+                        settings.NEUTTS_SERVER_URL, json={"text": sentence}, timeout=120
+                    )
+                    if response.status_code == 200:
+                        audio_files.append(
+                            {
+                                "file_bytes": response.content,
+                                "filename": filename,
+                                "title": filename.replace(".wav", "..."),
+                            }
+                        )
+                    else:
+                        logger.info(
+                            f"Failed to generate audio for sentence: {sentence}"
+                        )
+                except Exception as e:
+                    logger.info(
+                        f"Error occurred while generating audio for sentence: {sentence}, error: {e}"
+                    )
+
         # TODO: join this to the try-except above, use specific exceptions to catch
         try:
             slack_bot = VocabSlackBot(token=settings.SLACK_BOT_TOKEN)
@@ -95,5 +121,16 @@ class VocabRunner(APIView):
                 {"reason": Responses.SERVER_ISSUE.value},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+        for audio_file in audio_files:
+            try:
+                slack_bot.send_message_with_files(
+                    channel_id=settings.SLACK_CHANNEL, file=audio_file
+                )
+            except Exception as e:
+                logger.info(
+                    f"Failed to send audio file: {audio_file['filename']} to Slack, error: {e}"
+                )
+                continue
 
         return Response({"message": "new word sent"}, status=status.HTTP_200_OK)
