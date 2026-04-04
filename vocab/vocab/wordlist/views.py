@@ -1,5 +1,6 @@
 import logging
 
+import requests
 from django.conf import settings
 from rest_framework import status
 from rest_framework.response import Response
@@ -11,7 +12,6 @@ from wordlist.exceptions import (
     UserDoesNotHaveWordGroup,
 )
 from wordlist.slack import VocabSlackBot
-from wordlist.tts import TTSApi
 from wordlist.utils import Responses, WordGenerator
 
 logger = logging.getLogger(__name__)
@@ -65,25 +65,30 @@ class VocabRunner(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        tts = TTSApi(api_key=settings.ELEVENLABS_API_KEY)
         audio_files = []
-        for sentence, _ in usages.collect().iter_rows():
-            filename = f"{sentence[:14].replace(' ', '_')}.mp3"
-            try:
-                audio = tts.generate_audio(text=sentence)
-                tts.generate_file(audio, filename)
-            except Exception as e:
-                logger.info(
-                    f"Failed to generate audio for sentence: {sentence}, error: {e}"
-                )
-                continue
-            audio_files.append(
-                {
-                    "file_bytes": b"".join(audio),
-                    "filename": filename,
-                    "title": filename.replace(".mp3", "..."),
-                }
-            )
+        if settings.NEUTTS_SERVER_URL:
+            for sentence, _ in usages.collect().iter_rows():
+                filename = f"{sentence[:16].replace(' ', '_')}.wav"
+                try:
+                    response = requests.post(
+                        settings.NEUTTS_SERVER_URL, json={"text": sentence}
+                    )
+                    if response.status_code == 200:
+                        audio_files.append(
+                            {
+                                "file_bytes": response.content,
+                                "filename": filename,
+                                "title": filename.replace(".wav", "..."),
+                            }
+                        )
+                    else:
+                        logger.info(
+                            f"Failed to generate audio for sentence: {sentence}"
+                        )
+                except Exception as e:
+                    logger.info(
+                        f"Error occurred while generating audio for sentence: {sentence}, error: {e}"
+                    )
 
         # TODO: join this to the try-except above, use specific exceptions to catch
         try:
