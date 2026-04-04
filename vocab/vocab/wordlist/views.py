@@ -71,7 +71,7 @@ class VocabRunner(APIView):
                 filename = f"{sentence[:16].replace(' ', '_')}.wav"
                 try:
                     response = requests.post(
-                        settings.NEUTTS_SERVER_URL, json={"text": sentence}
+                        settings.NEUTTS_SERVER_URL, json={"text": sentence}, timeout=120
                     )
                     if response.status_code == 200:
                         audio_files.append(
