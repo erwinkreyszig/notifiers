@@ -10,3 +10,4 @@ services:
       LOG_LEVEL: ${LOG_LEVEL}
     env_file:
       - .env
+    restart: always
